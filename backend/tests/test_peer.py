@@ -165,3 +165,15 @@ async def test_I1_send_queues_behind_pending_outbox(ab):
     a.peer.queue(b.fpr, "ping", {})
     await a.peer.send_outs([__import__("p2psec.engine", fromlist=["Out"]).Out([b.fpr], "ping", {})])
     assert dbmod.row(a.conn, "SELECT count(*) n FROM outbox")["n"] == 2
+
+
+async def test_unreachable_pair_address_explains_what_to_check(tmp_path):
+    a = await make_node(tmp_path, "lonely")
+    try:
+        import socket
+        s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()   # nothing listens here
+        sess = a.peer.begin_pair(f"127.0.0.1:{port}")
+        await until(lambda: sess.state == "failed")
+        assert "Could not reach 127.0.0.1:" in sess.error and "start script" in sess.error
+    finally:
+        await a.shutdown()

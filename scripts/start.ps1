@@ -1,14 +1,13 @@
 # Start P2PSec on this device (Windows). Run the same script on every device on the Wi-Fi.
 #   powershell -ExecutionPolicy Bypass -File scripts\start.ps1 [-LanIp 192.168.1.10]
-# Run PowerShell as administrator once so the firewall ports can be opened.
+# The first run asks Windows for permission once, to open ports 7600 and 7606 to your local network.
 param([string]$LanIp = "")
 . "$PSScriptRoot\common.ps1"
 Assert-Docker
 
 if (-not $LanIp) { $LanIp = Get-LanIp }
 Set-EnvValue "LAN_IP" $LanIp
-Open-FirewallPort 7600 "P2PSec node 7600"
-Open-FirewallPort 7606 "P2PSec demo Tom 7606"
+Open-P2PSecFirewall
 
 docker compose up -d --build
 if ($LASTEXITCODE -ne 0) { throw "docker compose failed." }

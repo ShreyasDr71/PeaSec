@@ -38,7 +38,7 @@ docker pull ghcr.io/shreyasdr71/peasec:latest
 ## Start it (same steps on every device)
 
 ```powershell
-# Windows: run PowerShell as administrator once, so the script can open the firewall ports
+# Windows (the first run asks once for permission to open the firewall)
 powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ```
 ```bash
@@ -46,8 +46,10 @@ powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ./scripts/start.sh
 ```
 
-The script finds this device's Wi-Fi address, opens TCP 7600 and 7606 in the Windows firewall, starts the container and
-prints what to do next. By hand it is `LAN_IP=<this device's Wi-Fi address> docker compose up -d`.
+The script finds this device's Wi-Fi address and opens TCP 7600 and 7606 to devices on your local network only.
+On Windows that is one "Allow changes?" prompt, and it works even when Windows has marked the Wi-Fi as Public; on Linux
+it uses `ufw`/`firewalld` with `sudo` if one is running. Then it starts the container and prints what to do next. A
+container cannot change its host's firewall, so this step lives in the script, not in Docker. By hand it is `LAN_IP=<this device's Wi-Fi address> docker compose up -d`.
 
 Open **http://127.0.0.1:8000** and sign in as **`user` / `user`**. A fresh node is just you: no teammates, no
 credentials, no history. A red banner reminds you to change the username and master password in *Node settings*
@@ -62,8 +64,10 @@ until you do.
 4. Add a credential on one device. From the other, *Request a credential → From a person*, then approve it.
 
 If the script picks the wrong network, pass the address: `-LanIp 192.168.1.20` (PowerShell) or
-`./scripts/start.sh 192.168.1.20`. If pairing times out, the receiving device's firewall is the usual cause: allow
-inbound TCP 7600 (and 7606 for the demo Tom). Broadcast discovery does not cross Docker Desktop, so you type addresses.
+`./scripts/start.sh 192.168.1.20`. If pairing says it *could not reach* the other computer: make sure that computer was
+started with the start script (and you clicked Yes on Windows), then test with `nc -zv <ip> 7600` (Linux/macOS) or
+`Test-NetConnection <ip> -Port 7600` (Windows). If that fails with both firewalls open, the router is isolating Wi-Fi
+clients; turn that off or use a phone hotspot. Broadcast discovery does not cross Docker Desktop, so you type addresses.
 
 ## Demo mode (optional)
 

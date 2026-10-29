@@ -29,3 +29,21 @@ wait_healthy() {
     done
   done
 }
+
+open_firewall() {   # $1 = this device's LAN IP. Only acts if a host firewall is actually running.
+  local subnet
+  subnet=$(ip -o -4 route show scope link 2>/dev/null | awk -v ip="$1" '$0 ~ ("src " ip) {print $1; exit}')
+  [ -n "$subnet" ] || subnet="$1/24"
+  if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet ufw 2>/dev/null; then
+    echo "Firewall (ufw): allowing TCP 7600 and 7606 from $subnet (sudo may ask for your password)."
+    sudo ufw allow proto tcp from "$subnet" to any port 7600,7606 >/dev/null
+  elif command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
+    echo "Firewall (firewalld): allowing TCP 7600 and 7606 from $subnet (sudo may ask for your password)."
+    for port in 7600 7606; do
+      sudo firewall-cmd --permanent --add-rich-rule="rule family=ipv4 source address=$subnet port port=$port protocol=tcp accept" >/dev/null
+    done
+    sudo firewall-cmd --reload >/dev/null
+  else
+    echo "Firewall: no ufw/firewalld running, nothing to open."
+  fi
+}

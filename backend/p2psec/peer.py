@@ -265,7 +265,13 @@ class PeerService:
         writer = None
         try:
             host, port = split_addr(s.addr)
-            reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), CONNECT_TIMEOUT)
+            try:
+                reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), CONNECT_TIMEOUT * 2)
+            except (OSError, asyncio.TimeoutError):
+                raise PairingError(
+                    f"Could not reach {s.addr}. Check that both computers are on the same Wi-Fi, that P2PSec is "
+                    f"running on the other one, and that it was started with the start script (which opens its "
+                    f"firewall for ports 7600 and 7606). Some routers also block devices from seeing each other.") from None
             self.node.audit.append("PAIR_STARTED", {"addr": s.addr}, {"role": "initiator"})
             proto = PairingInitiator(self.node.identity, self._my_card())
             await framing.send_json(writer, {"t": "hello", "v": 1, "kind": "pair"})
