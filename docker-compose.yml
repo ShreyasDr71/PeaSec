@@ -1,0 +1,54 @@
+# Six-person demo team on one machine. UIs are bound to 127.0.0.1 only:
+#   priya http://127.0.0.1:8001   marcus :8002   elena :8003
+#   jamal http://127.0.0.1:8004   sofia  :8005   tom   :8006
+# Tom's peer port is also published on the LAN (7606) so a second computer can pair with him.
+name: p2psec
+
+x-node: &node
+  image: ghcr.io/shreyasdr71/peasec:latest
+  pull_policy: never        # priya builds or pulls the one shared image
+  restart: unless-stopped
+  networks: [lan]
+
+x-demo: &demo
+  DEMO_MODE: "1"
+  DEMO_SEED: "p2psec-demo-seed-2026"   # public on purpose: demo keys are NOT secret
+
+services:
+  priya:
+    <<: *node
+    build: .
+    pull_policy: missing     # use a pulled/built image if present, otherwise build it
+    environment: { <<: *demo, NODE_ID: priya, ADVERTISE_ADDR: "priya:7600" }
+    ports: ["127.0.0.1:8001:8000"]
+    volumes: ["priya:/data"]
+  marcus:
+    <<: *node
+    environment: { <<: *demo, NODE_ID: marcus, ADVERTISE_ADDR: "marcus:7600" }
+    ports: ["127.0.0.1:8002:8000"]
+    volumes: ["marcus:/data"]
+  elena:
+    <<: *node
+    environment: { <<: *demo, NODE_ID: elena, ADVERTISE_ADDR: "elena:7600" }
+    ports: ["127.0.0.1:8003:8000"]
+    volumes: ["elena:/data"]
+  jamal:
+    <<: *node
+    environment: { <<: *demo, NODE_ID: jamal, ADVERTISE_ADDR: "jamal:7600" }
+    ports: ["127.0.0.1:8004:8000"]
+    volumes: ["jamal:/data"]
+  sofia:
+    <<: *node
+    environment: { <<: *demo, NODE_ID: sofia, ADVERTISE_ADDR: "sofia:7600" }
+    ports: ["127.0.0.1:8005:8000"]
+    volumes: ["sofia:/data"]
+  tom:
+    <<: *node
+    environment: { <<: *demo, NODE_ID: tom, ADVERTISE_ADDR: "${TOM_ADVERTISE:-tom:7600}" }
+    ports: ["127.0.0.1:8006:8000", "0.0.0.0:7606:7600"]
+    volumes: ["tom:/data"]
+
+networks:
+  lan: {}
+
+volumes: { priya: {}, marcus: {}, elena: {}, jamal: {}, sofia: {}, tom: {} }

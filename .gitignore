@@ -1,0 +1,20 @@
+# local environment (holds this machine's LAN IP)
+.env
+.env.*
+
+# build and dependency output
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+frontend/dist/
+
+# node data: vaults, keys, logs
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# tooling scratch
+.superpowers/
+.claude/

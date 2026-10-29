@@ -1,0 +1,18 @@
+# One fresh, real (non-demo) node for a second computer.
+#   Easiest: scripts/start-node.ps1 (Windows) or scripts/start-node.sh (macOS/Linux)
+#   By hand: LAN_IP=192.168.1.42 docker compose -f docker-compose.lan.yml up -d --build
+# Then open http://127.0.0.1:8000, create your vault, and pair with <first PC's IP>:7606 (Tom).
+name: p2psec-node
+
+services:
+  me:
+    build: .
+    pull_policy: missing
+    image: ghcr.io/shreyasdr71/peasec:latest
+    restart: unless-stopped
+    environment:
+      NODE_ID: me
+      ADVERTISE_ADDR: "${LAN_IP:?set LAN_IP to this computer's LAN address}:7600"
+    ports: ["127.0.0.1:8000:8000", "0.0.0.0:7600:7600"]
+    volumes: ["me:/data"]
+volumes: { me: {} }
