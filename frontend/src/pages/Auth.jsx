@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { post, setCsrf } from "../api.js";
+import { BASE, post, setCsrf } from "../api.js";
+import { go } from "../util.js";
 import { PeaPod } from "../components/Logo.jsx";
 import { Field } from "../components/ui.jsx";
 
@@ -17,6 +18,7 @@ function Frame({ children }) {
 }
 
 export function Unlock({ status, onDone }) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -25,11 +27,11 @@ export function Unlock({ status, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await post("/unlock", { password });
+      const r = await post("/unlock", { username, password });
       setCsrf(r.csrf);
       await onDone();
     } catch (err) {
-      setError(err.status === 401 ? "That master password is wrong. Failed attempts are logged." : err.message);
+      setError(err.status === 401 ? "Wrong username or password. Failed attempts are logged." : err.message);
     } finally {
       setBusy(false);
     }
@@ -42,8 +44,12 @@ export function Unlock({ status, onDone }) {
           <span>{status.profile.title}</span>
           <code className="fpr">{status.fpr}</code>
         </div>
+        <Field label="Username">
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="username"
+                 autoCapitalize="none" spellCheck={false} required />
+        </Field>
         <Field label="Master password">
-          <input type="password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)}
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                  autoComplete="current-password" required />
         </Field>
         {error && <p className="form-error" role="alert">{error}</p>}
@@ -51,9 +57,16 @@ export function Unlock({ status, onDone }) {
         {status.service_ready && (
           <p className="gate-note">This node is still serving teammates while locked: group checkouts and receipts keep working.</p>
         )}
-        {status.demo && (
-          <p className="gate-demo">Demo node. The master password is <code>{status.demo_password}</code>.</p>
+        {status.login_hint && (
+          <p className="gate-demo">
+            {status.demo ? "Demo user. " : "First sign-in. "}Username and password: <code>{status.login_hint}</code>
+            {!status.demo && ". Change them in Node settings after you sign in."}
+          </p>
         )}
+        {status.demo_available && (
+          <button type="button" className="btn btn-block" onClick={() => go("/demo-mode")}>Demo mode: try a seeded six-person team</button>
+        )}
+        {BASE !== "/" && <a className="gate-back" href="/">Back to my own node</a>}
       </form>
     </Frame>
   );

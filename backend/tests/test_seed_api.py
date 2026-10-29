@@ -33,7 +33,7 @@ def client(node):
 
 
 async def login(c):
-    r = await c.post("/api/unlock", json={"password": DEMO_PASSWORD})
+    r = await c.post("/api/unlock", json={"username": "priya", "password": DEMO_PASSWORD})
     assert r.status_code == 200
     return {"X-CSRF": r.json()["csrf"]}
 
@@ -74,7 +74,7 @@ async def test_locked_returns_401(priya):
 
 async def test_wrong_password_401_and_logged(priya):
     async with client(priya) as c:
-        r = await c.post("/api/unlock", json={"password": "nope"})
+        r = await c.post("/api/unlock", json={"username": "priya", "password": "nope"})
         assert r.status_code == 401
     assert dbmod.row(priya.conn, "SELECT event_type FROM audit ORDER BY seq DESC LIMIT 1")["event_type"] == "UNLOCK_FAILED"
 
@@ -134,7 +134,7 @@ async def test_I4_unlock_requires_json_content_type(priya):
 
 async def test_I4_cross_origin_post_rejected(priya):
     async with client(priya) as c:
-        r = await c.post("/api/unlock", json={"password": "p2psec-demo"}, headers={"Origin": "http://evil.example"})
+        r = await c.post("/api/unlock", json={"username": "priya", "password": "p2psec-demo"}, headers={"Origin": "http://evil.example"})
         assert r.status_code == 403
-        r = await c.post("/api/unlock", json={"password": "p2psec-demo"}, headers={"Origin": "http://127.0.0.1"})
+        r = await c.post("/api/unlock", json={"username": "priya", "password": "p2psec-demo"}, headers={"Origin": "http://127.0.0.1"})
         assert r.status_code == 200

@@ -119,7 +119,9 @@ def group_doc(seed: str, g: dict) -> dict:
                                [person(n) for n in g["members"]], g["policy"], creds, [ids[g["custodians"][0]]])
 
 
-def build(node, params: dict | None = None) -> None:
+def build(node, params: dict | None = None, addr_of=None) -> None:
+    """addr_of(node_id) -> "host:port" where that teammate's node listens."""
+    addr_of = addr_of or (lambda n: f"{n}:7600")
     me = node.settings.node_id
     if me not in TEAM:
         raise SystemExit(f"NODE_ID '{me}' is not part of the demo team: {', '.join(TEAM)}")
@@ -127,7 +129,7 @@ def build(node, params: dict | None = None) -> None:
     now = db.now()
     t0 = now - 14 * DAY
     from .node import DEMO_PASSWORD
-    node.setup(DEMO_PASSWORD, TEAM[me], identity(seed, me), params=params, ts=t0)
+    node.setup(DEMO_PASSWORD, TEAM[me], identity(seed, me), params=params, ts=t0, login=me)
     eng, conn = node.engine, node.conn
     events: list[tuple] = []          # (ts, event_type, subject, details)
 
@@ -145,7 +147,7 @@ def build(node, params: dict | None = None) -> None:
         ts = t0 + HOUR + i * 600
         eng.add_contact({"fpr": oi.fingerprint(), "name": TEAM[other]["name"], "title": TEAM[other]["title"],
                          "dept": TEAM[other]["dept"], "ed_pub": oi.ed_pub_bytes(), "x_pub": oi.x_pub_bytes(),
-                         "addr": f"{other}:7600", "paired_at": ts, "demo": True})
+                         "addr": addr_of(other), "paired_at": ts, "demo": True})
         ev(ts, "PAIRED", {"peer_fpr": oi.fingerprint(), "peer_name": TEAM[other]["name"]}, {"demo_peer": True})
 
     # groups and custodian secrets

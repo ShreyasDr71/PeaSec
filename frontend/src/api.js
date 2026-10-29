@@ -1,3 +1,6 @@
+// "/" for your own node, "/demo/<id>/" when this page belongs to a demo-team node
+export const BASE = (window.location.pathname.match(/^\/demo\/[a-z]+\//) || ["/"])[0];
+
 let csrf = null;
 let onLocked = () => {};
 
@@ -11,7 +14,7 @@ export class ApiError extends Error {
 export async function api(path, { method = "GET", body } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (method !== "GET" && csrf) headers["X-CSRF"] = csrf;
-  const r = await fetch(`/api${path}`, {
+  const r = await fetch(`${BASE}api${path}`, {
     method, headers, credentials: "same-origin", body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await r.json().catch(() => ({}));

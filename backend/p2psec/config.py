@@ -16,8 +16,10 @@ class Settings:
     advertise_addr: str = ""
     beacon_port: int = 7601
     beacon: bool = True
-    demo_mode: bool = False
+    demo_mode: bool = False          # only the in-process demo team's nodes set this
     demo_seed: str = ""
+    default_login: bool = True       # a fresh node signs in as user / user until changed
+    tom_advertise: str = ""          # LAN address other devices use to reach the demo Tom
     allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost")
     idle_lock_seconds: int = 600
 
@@ -32,11 +34,9 @@ class Settings:
             peer_port=int(env("PEER_PORT", "7600")),
             advertise_addr=env("ADVERTISE_ADDR", ""),
             beacon=env("BEACON", "1") == "1",
-            demo_mode=env("DEMO_MODE", "0") == "1",
-            demo_seed=env("DEMO_SEED", ""),
+            default_login=env("DEFAULT_LOGIN", "1") == "1",
+            tom_advertise=env("TOM_ADVERTISE", ""),
             allowed_hosts=tuple(h.strip() for h in env("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()),
             idle_lock_seconds=int(env("IDLE_LOCK_SECONDS", "600")),
         )
-        if s.demo_seed and not s.demo_mode:
-            raise SystemExit("DEMO_SEED is set but DEMO_MODE is not 1: refusing to start with public demo keys.")
         return s

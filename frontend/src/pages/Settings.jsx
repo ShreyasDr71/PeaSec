@@ -5,6 +5,7 @@ import { Field, ReadField, useAction } from "../components/ui.jsx";
 export function Settings({ status }) {
   const [p, setP] = useState(status.profile);
   const [pw, setPw] = useState({ old: "", new: "", confirm: "" });
+  const [login, setLogin] = useState("");
   const act = useAction();
   return (
     <div className="page">
@@ -35,11 +36,25 @@ export function Settings({ status }) {
             <Field label="Department"><input value={p.dept} onChange={(e) => setP({ ...p, dept: e.target.value })} /></Field>
             <div className="form-actions"><button className="btn btn-primary">Save profile</button></div>
           </form>
+          <h2>Username</h2>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (await act(() => put("/settings/login", { username: login }), "Username changed")) setLogin("");
+          }}>
+            <Field label="New username" hint="Used only to sign in to this node.">
+              <input value={login} onChange={(e) => setLogin(e.target.value)} required maxLength={64} autoComplete="username" />
+            </Field>
+            <div className="form-actions"><button className="btn btn-primary">Change username</button></div>
+          </form>
           <h2>Master password</h2>
+          {status.default_password && <p className="form-error">You are using the default password "user". Change it now.</p>}
           <form onSubmit={async (e) => {
             e.preventDefault();
             if (pw.new !== pw.confirm) return act(async () => { throw new Error("The new passwords do not match."); });
-            if (await act(() => post("/settings/password", { old: pw.old, new: pw.new }), "Master password changed")) setPw({ old: "", new: "", confirm: "" });
+            if (await act(() => post("/settings/password", { old: pw.old, new: pw.new }), "Master password changed")) {
+              setPw({ old: "", new: "", confirm: "" });
+              window.location.reload();
+            }
           }}>
             <Field label="Current"><input type="password" value={pw.old} onChange={(e) => setPw({ ...pw, old: e.target.value })} required autoComplete="current-password" /></Field>
             <Field label="New"><input type="password" value={pw.new} onChange={(e) => setPw({ ...pw, new: e.target.value })} required minLength={12} autoComplete="new-password" /></Field>

@@ -12,6 +12,8 @@ import { Access, Rotations } from "./pages/Access.jsx";
 import { Peers, Pair, IncomingPairBanner } from "./pages/Peers.jsx";
 import { AuditLog, Verify, Alerts } from "./pages/Audit.jsx";
 import { Settings } from "./pages/Settings.jsx";
+import { DemoMode } from "./pages/Demo.jsx";
+import { BASE } from "./api.js";
 
 const NAV = [
   { section: "Self-service", items: [
@@ -41,10 +43,10 @@ const NAV = [
     { path: "/verify", label: "Log integrity" },
     { path: "/alerts", label: "Security alerts", count: "alerts" },
   ] },
-  { section: "Settings", items: [{ path: "/settings", label: "Node settings" }] },
+  { section: "Settings", items: [{ path: "/settings", label: "Node settings" }, { path: "/demo-mode", label: "Demo mode", demo: true }] },
 ];
 
-function route(path, status) {
+export function route(path, status) {
   const [, a, b] = path.split("?")[0].split("/");
   switch (a) {
     case "dashboard": return <Dashboard />;
@@ -62,6 +64,7 @@ function route(path, status) {
     case "verify": return <Verify />;
     case "alerts": return <Alerts />;
     case "settings": return <Settings status={status} />;
+    case "demo-mode": return <DemoMode status={status} />;
     default: return <Dashboard />;
   }
 }
@@ -81,7 +84,8 @@ function Shell({ status, onLock }) {
       <header className="banner">
         <button className="icon-btn nav-toggle" aria-label="Menu" onClick={() => setNavOpen((x) => !x)}>☰</button>
         <a href="#/dashboard" className="banner-brand" aria-label="P2PSec home"><Wordmark /></a>
-        {status.demo && <span className="demo-flag" title="Keys on this node are derived from a public seed">Demo — keys are not secret</span>}
+        {status.demo && <span className="demo-flag" title="Keys on this node are derived from a public seed">Demo user: keys are not secret</span>}
+        {BASE !== "/" && <a className="banner-back" href="/">My own node</a>}
         <div className="banner-right">
           <span className="banner-user">
             <strong>{status.profile.name}</strong>
@@ -95,7 +99,8 @@ function Shell({ status, onLock }) {
           <input className="nav-filter" type="search" placeholder="Filter navigator" value={filter}
                  onChange={(e) => setFilter(e.target.value)} aria-label="Filter navigator" />
           {NAV.map((s) => {
-            const items = s.items.filter((i) => !f || i.label.toLowerCase().includes(f) || s.section.toLowerCase().includes(f));
+            const items = s.items.filter((i) => (!i.demo || status.demo_available) &&
+              (!f || i.label.toLowerCase().includes(f) || s.section.toLowerCase().includes(f)));
             if (!items.length) return null;
             return (
               <div className="nav-section" key={s.section}>
@@ -115,6 +120,10 @@ function Shell({ status, onLock }) {
           })}
         </nav>
         <main className="main">
+          {status.default_password && (
+            <a className="alert-strip default-pw" href="#/settings">You are still using the default sign-in (user / user).
+              Anyone with access to this computer can open your vault. Change it in Node settings.</a>
+          )}
           <IncomingPairBanner />
           {route(path, status)}
         </main>
@@ -124,6 +133,7 @@ function Shell({ status, onLock }) {
 }
 
 export default function App() {
+  const hash = useHashRoute();      // re-render on navigation so the public demo page can open from sign-in
   const [status, setStatus] = useState(null);
   const refresh = async () => {
     try {
@@ -141,11 +151,17 @@ export default function App() {
 
   if (!status) return <div className="splash">Starting…</div>;
   if (status.error) return <div className="splash">This node is not answering: {status.error}</div>;
+  const publicDemo = !status.unlocked && status.demo_available && hash.startsWith("/demo-mode");
   return (
     <ToastHost>
-      {!status.initialized ? <Setup onDone={refresh} />
+      {publicDemo ? <DemoGate status={status} />
+        : !status.initialized ? <Setup onDone={refresh} />
         : !status.unlocked ? <Unlock status={status} onDone={refresh} />
         : <Shell status={status} onLock={() => { setCsrf(null); refresh(); go("/dashboard"); }} />}
     </ToastHost>
   );
+}
+
+function DemoGate({ status }) {
+  return <div className="gate-page"><DemoMode status={status} /></div>;
 }

@@ -18,6 +18,7 @@ from .vault import BadPassword, Vault
 
 log = logging.getLogger("p2psec.node")
 DEMO_PASSWORD = "p2psec-demo"
+DEFAULT_LOGIN = ("user", "user")
 SWEEP_EVERY, FLUSH_EVERY, PING_EVERY = 15, 10, 30
 
 
@@ -36,6 +37,7 @@ class Node:
         self.peer_port = settings.peer_port
         self.advertise_addr = settings.advertise_addr or f"{socket.gethostname()}:{settings.peer_port}"
         self._loops: list[asyncio.Task] = []
+        self.vault_params: dict | None = None     # Argon2 override (tests)
 
     # --- state ------------------------------------------------------------------
 
@@ -61,14 +63,24 @@ class Node:
 
     # --- setup / unlock -----------------------------------------------------------
 
+    @property
+    def login_name(self) -> str:
+        return db.get_meta(self.conn, "login", DEFAULT_LOGIN[0])
+
+    @property
+    def default_password(self) -> bool:
+        return bool(db.get_meta(self.conn, "default_password", False))
+
     def setup(self, password: str, profile: dict, identity: Identity | None = None,
-              params: dict | None = None, ts: float | None = None) -> None:
+              params: dict | None = None, ts: float | None = None, weak_ok: bool = False,
+              login: str | None = None) -> None:
         if self.initialized:
             raise RuntimeError("already initialized")
-        if len(password) < 8:
+        if len(password) < 8 and not weak_ok:
             raise ValueError("master password must be at least 8 characters")
         identity = identity or Identity.generate()
-        vault, header = Vault.create(password, params=params)
+        vault, header = Vault.create(password, params=params or self.vault_params)
+        db.set_meta(self.conn, "login", login or DEFAULT_LOGIN[0])
         db.set_meta(self.conn, "vault", header)
         db.set_meta(self.conn, "profile", {k: profile.get(k, "") for k in ("name", "title", "dept")})
         db.set_meta(self.conn, "identity_pub", {"fpr": identity.fingerprint(),
@@ -128,7 +140,15 @@ class Node:
             raise ValueError("master password must be at least 8 characters")
         header = db.get_meta(self.conn, "vault")
         db.set_meta(self.conn, "vault", self.vault.rewrap(header, old, new))
+        db.set_meta(self.conn, "default_password", False)
         self.audit.append("PASSWORD_CHANGED", {"node": self.settings.node_id})
+
+    def set_login(self, name: str) -> None:
+        name = name.strip()
+        if not name or len(name) > 64:
+            raise ValueError("username must be 1-64 characters")
+        db.set_meta(self.conn, "login", name)
+        self.audit.append("LOGIN_CHANGED", {"node": self.settings.node_id})
 
     def set_profile(self, profile: dict) -> None:
         db.set_meta(self.conn, "profile", {k: str(profile.get(k, ""))[:100] for k in ("name", "title", "dept")})
@@ -148,14 +168,17 @@ class Node:
             await self.beacon.start()
 
     async def boot(self) -> None:
-        if not self.initialized and self.settings.demo_mode and self.settings.demo_seed:
-            from . import seed
-            seed.build(self)
+        """A normal node: one person, no seed data. Signs in as user / user until changed."""
+        if not self.initialized and self.settings.default_login:
+            self.setup(DEFAULT_LOGIN[1], {"name": "User", "title": "", "dept": ""}, weak_ok=True,
+                       login=DEFAULT_LOGIN[0])
+            db.set_meta(self.conn, "default_password", True)
             self.full_lock()
         await self.start_peer()
-        if self.settings.demo_mode and self.initialized:
-            await self.unlock(DEMO_PASSWORD)
-            self.soft_lock()
+
+    @property
+    def listen_port(self) -> int:
+        return self.peer.server.sockets[0].getsockname()[1] if self.peer.server else 0
 
     def _start_loops(self) -> None:
         if self._loops:
@@ -192,8 +215,10 @@ class Node:
         if outs:
             self.peer.spawn(self.peer.send_outs(outs))
 
-    async def shutdown(self) -> None:
+    async def shutdown(self, close_db: bool = False) -> None:
         self._stop_loops()
         await self.peer.stop()
         if self.beacon:
             self.beacon.stop()
+        if close_db:
+            self.conn.close()

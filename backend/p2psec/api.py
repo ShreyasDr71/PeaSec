@@ -15,7 +15,7 @@ import secrets
 import time
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, groups
@@ -24,14 +24,18 @@ from .vault import BadPassword, Locked
 
 COOKIE = "p2psec_session"
 PUBLIC = {"/api/status", "/api/unlock", "/api/setup"}
+DEMO_PUBLIC = {"/api/demo", "/api/demo/start", "/api/demo/stop", "/api/demo/reset"}
 
 
 def _strip(row: dict) -> dict:
     return {k: v for k, v in row.items() if not k.endswith("_ct") and not isinstance(v, bytes)}
 
 
-def create_app(node) -> FastAPI:
+def create_app(node, demo=None, base: str = "") -> FastAPI:
+    """base: URL prefix this app is served under ("" for your own node, "/demo/<id>" for demo nodes)."""
     app = FastAPI(title="P2PSec", docs_url=None, redoc_url=None, openapi_url=None)
+    cookie = COOKIE if not base else f"{COOKIE}_{node.settings.node_id}"
+    public = PUBLIC | (DEMO_PUBLIC if demo else set())
     state = {"token": None, "csrf": None, "last": 0.0, "fails": 0}
     unlock_lock = asyncio.Lock()
 
@@ -39,7 +43,7 @@ def create_app(node) -> FastAPI:
         state.update(token=None, csrf=None)
 
     def session_ok(request: Request) -> bool:
-        tok = request.cookies.get(COOKIE)
+        tok = request.cookies.get(cookie)
         return bool(state["token"] and tok and hmac.compare_digest(tok, state["token"]) and node.personal_unlocked)
 
     def idle_check():
@@ -61,7 +65,10 @@ def create_app(node) -> FastAPI:
         host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
         if host not in node.settings.allowed_hosts:
             return JSONResponse({"detail": "Host not allowed"}, status_code=400)
-        path = request.url.path
+        # path relative to this app's mount point (/demo/<id> for demo nodes), so the
+        # sign-in and CSRF checks below apply no matter which prefix the request came through
+        full, prefix = request.scope["path"], request.scope.get("root_path", "")
+        path = full[len(prefix):] if prefix and full.startswith(prefix) else full
         if path.startswith("/api/") and request.method not in ("GET", "HEAD"):
             # A browser always sends Origin on cross-site POSTs; a page elsewhere must not drive this API,
             # not even /api/unlock. JSON-only bodies also rule out "simple" form/text posts.
@@ -72,7 +79,7 @@ def create_app(node) -> FastAPI:
             has_body = request.headers.get("content-length", "0") != "0" or "transfer-encoding" in request.headers
             if has_body and ctype != "application/json":
                 return JSONResponse({"detail": "Content-Type must be application/json"}, status_code=415)
-        if path.startswith("/api/") and path not in PUBLIC:
+        if path.startswith("/api/") and path not in public:
             idle_check()
             if not session_ok(request):
                 return JSONResponse({"detail": "Locked"}, status_code=401)
@@ -108,7 +115,7 @@ def create_app(node) -> FastAPI:
     def open_session() -> JSONResponse:
         state.update(token=secrets.token_urlsafe(32), csrf=secrets.token_urlsafe(32), last=time.time())
         resp = JSONResponse({"ok": True, "csrf": state["csrf"]})
-        resp.set_cookie(COOKIE, state["token"], httponly=True, samesite="strict", path="/")
+        resp.set_cookie(cookie, state["token"], httponly=True, samesite="strict", path=base or "/")
         return resp
 
     E = lambda: node.engine
@@ -123,6 +130,10 @@ def create_app(node) -> FastAPI:
                 "profile": node.profile, "fpr": node.fpr, "unlocked": authed, "service_ready": node.service_ready,
                 "peer_addr": node.advertise_addr, "csrf": state["csrf"] if authed else None,
                 "demo_password": "p2psec-demo" if node.settings.demo_mode else None,
+                "default_password": node.default_password, "base": base,
+                "login_hint": (f"{node.login_name} / p2psec-demo" if node.settings.demo_mode
+                               else "user / user" if node.default_password else None),
+                "demo_available": demo is not None,
                 "idle_lock_seconds": node.settings.idle_lock_seconds,
                 "account_types": ACCOUNT_TYPES, "criticalities": CRITICALITIES}
 
@@ -144,18 +155,24 @@ def create_app(node) -> FastAPI:
         async with unlock_lock:                       # one Argon2 run at a time
             started = time.monotonic()
             backoff = min(2 ** max(0, state["fails"] - 3), 30)
-            try:
-                await node.unlock(str(b.get("password", "")))
-                ok = True
-            except BadPassword:
+            # a wrong username fails exactly like a wrong password (same timing, same message)
+            if not hmac.compare_digest(str(b.get("username", "")).strip().encode(), node.login_name.encode()):
                 ok = False
-            except RuntimeError as e:
-                raise HTTPException(409, str(e))
+                if node.audit:
+                    node.audit.append("UNLOCK_FAILED", {"node": node.settings.node_id}, {"reason": "username"})
+            else:
+                try:
+                    await node.unlock(str(b.get("password", "")))
+                    ok = True
+                except BadPassword:
+                    ok = False
+                except RuntimeError as e:
+                    raise HTTPException(409, str(e))
             # same minimum duration for right and wrong answers, growing after repeated failures
             await asyncio.sleep(max(0.0, 1.0 + (0 if ok else backoff) - (time.monotonic() - started)))
             if not ok:
                 state["fails"] += 1
-                raise HTTPException(401, "Wrong master password")
+                raise HTTPException(401, "Wrong username or password")
             state["fails"] = 0
         return open_session()
 
@@ -511,6 +528,38 @@ def create_app(node) -> FastAPI:
         node.set_profile(b)
         return {"ok": True}
 
+    @app.put("/api/settings/login")
+    async def set_login(request: Request):
+        b = await body(request)
+        node.set_login(str(b.get("username", "")))
+        return {"ok": True}
+
+    # --- demo mode (only on your own node's app) -----------------------------------------
+
+    if demo is not None:
+        def demo_view():
+            return {"running": demo.running, "users": demo.users(), "password": "p2psec-demo",
+                    "tom_addr": demo.main.tom_advertise or None}
+
+        @app.get("/api/demo")
+        async def demo_status():
+            return demo_view()
+
+        @app.post("/api/demo/start")
+        async def demo_start():
+            await demo.start()
+            return demo_view()
+
+        @app.post("/api/demo/stop")
+        async def demo_stop():
+            await demo.stop(forget=True)
+            return demo_view()
+
+        @app.post("/api/demo/reset")
+        async def demo_reset():
+            await demo.reset()
+            return demo_view()
+
     @app.post("/api/settings/password")
     async def password(request: Request):
         b = await body(request)
@@ -539,3 +588,25 @@ def create_app(node) -> FastAPI:
 def _audit_row(r: dict) -> dict:
     return {"seq": r["seq"], "ts": r["ts"], "actor_fpr": r["actor_fpr"], "event_type": r["event_type"],
             "subject": json.loads(r["subject"]), "details": json.loads(r["details"]), "hash": r["hash"]}
+
+
+class Root:
+    """ASGI entry point: /demo/<id>/... goes to that demo node's app, everything else to your node."""
+
+    def __init__(self, main_app, demo=None):
+        self.main_app, self.demo = main_app, demo
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "") if scope["type"] in ("http", "websocket") else ""
+        if path.startswith("/demo/") and self.demo is not None:
+            parts = path.split("/", 3)          # ["", "demo", "<id>", "rest"]
+            nid = parts[2]
+            sub = self.demo.apps.get(nid)
+            if sub is None:
+                return await JSONResponse({"detail": "Demo mode is off"}, status_code=404)(scope, receive, send)
+            if len(parts) == 3:
+                return await RedirectResponse(f"/demo/{nid}/")(scope, receive, send)
+            # ASGI convention: keep the full path and declare the prefix as root_path
+            scope = dict(scope, root_path=scope.get("root_path", "") + f"/demo/{nid}")
+            return await sub(scope, receive, send)
+        return await self.main_app(scope, receive, send)

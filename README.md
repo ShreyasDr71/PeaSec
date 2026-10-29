@@ -28,61 +28,58 @@ git clone https://github.com/ShreyasDr71/PeaSec.git
 cd PeaSec
 ```
 
-You need Docker (Docker Desktop on Windows/macOS). The image is built from source the first time you start, or
-you can pull the prebuilt one (amd64 and arm64, published by GitHub Actions on every push to `main`):
+You need Docker (Docker Desktop on Windows/macOS). The image is built from source the first time you start, or you can
+pull the prebuilt one (amd64 and arm64, published by GitHub Actions on every push to `main`) and skip the build:
 
 ```bash
 docker pull ghcr.io/shreyasdr71/peasec:latest
 ```
 
-## Two devices on the same Wi-Fi
-
-**Device A: the demo team.** Six people from the fictional P2PSec IT team, already paired, with history.
+## Start it (same steps on every device)
 
 ```powershell
-# Windows (run PowerShell as administrator so the script can open the firewall port)
-powershell -ExecutionPolicy Bypass -File scripts\start-team.ps1
+# Windows: run PowerShell as administrator once, so the script can open the firewall ports
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ```
 ```bash
 # macOS / Linux
-./scripts/start-team.sh
+./scripts/start.sh
 ```
 
-The script finds this device's Wi-Fi address, opens TCP 7606 in the Windows firewall, starts the six nodes, and
-prints the address the other device should pair with (for example `192.168.1.10:7606`, which is Tom's node).
+The script finds this device's Wi-Fi address, opens TCP 7600 and 7606 in the Windows firewall, starts the container and
+prints what to do next. By hand it is `LAN_IP=<this device's Wi-Fi address> docker compose up -d`.
 
-**Device B: your own node.** A fresh, real node with keys generated on that device.
+Open **http://127.0.0.1:8000** and sign in as **`user` / `user`**. A fresh node is just you: no teammates, no
+credentials, no history. A red banner reminds you to change the username and master password in *Node settings*
+until you do.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start-node.ps1    # Windows, as administrator
-```
-```bash
-./scripts/start-node.sh                                               # macOS / Linux
-```
+## Use it between two devices on the same Wi-Fi
 
-Open http://127.0.0.1:8000 on device B, create your vault, go to **Pair a device** and enter the address device A
-printed. On device A, open Tom (http://127.0.0.1:8006), accept the request, and read the six-digit codes to each
-other. Device B warns that Tom uses demo keys (true: anyone with the demo seed could impersonate Tom); tick the box
-to continue. Then, from device B, ask Tom for his sandbox VM login, or create a group and add Tom.
+1. Run the start script on both devices and sign in on each.
+2. On one device, go to *Pair a device* and enter the other device's address, which the script printed, such as
+   `192.168.1.20:7600`.
+3. Accept the request on the other device and read the six-digit codes to each other. Confirm only if they match.
+4. Add a credential on one device. From the other, *Request a credential → From a person*, then approve it.
 
-If the script cannot find the right network, pass the address yourself: `-LanIp 192.168.1.20` (PowerShell) or
-`./scripts/start-node.sh 192.168.1.20`. If pairing times out, the firewall on the receiving device is the usual
-cause: allow inbound TCP 7606 on device A and 7600 on device B. Broadcast discovery does not cross Docker Desktop,
-so between devices you always type the address.
+If the script picks the wrong network, pass the address: `-LanIp 192.168.1.20` (PowerShell) or
+`./scripts/start.sh 192.168.1.20`. If pairing times out, the receiving device's firewall is the usual cause: allow
+inbound TCP 7600 (and 7606 for the demo Tom). Broadcast discovery does not cross Docker Desktop, so you type addresses.
 
-## The demo team
+## Demo mode (optional)
 
-Every demo node's master password is `p2psec-demo`. Open each person in a separate private browser window (cookies
-are per host and port).
+Nothing is seeded unless you ask for it. Click **Demo mode** on the sign-in page (or in *Settings* when signed in),
+then **Start demo mode**. Six fictional people from an IT team start inside the same container, already paired, with
+groups, requests, checkouts and audit history. Each opens in its own tab at `http://127.0.0.1:8000/demo/<name>/` and
+signs in with their own name and the password `p2psec-demo`.
 
-| Person | Role | UI |
+| Person | Role | Sign in |
 |---|---|---|
-| Priya Nair | IT Operations Lead. Custodian: Infrastructure | http://127.0.0.1:8001 |
-| Marcus Chen | DBA. Custodian: Databases | http://127.0.0.1:8002 |
-| Elena Rossi | Security Engineer. Custodian: Security Tools, Infrastructure | http://127.0.0.1:8003 |
-| Jamal Okafor | Backend Developer. Member: Databases, Infrastructure | http://127.0.0.1:8004 |
-| Sofia Alvarez | Finance Systems Analyst. Custodian: Finance Apps | http://127.0.0.1:8005 |
-| Tom Becker | Intern. Paired with nobody | http://127.0.0.1:8006 |
+| Priya Nair | IT Operations Lead. Custodian: Infrastructure | `priya` |
+| Marcus Chen | DBA. Custodian: Databases | `marcus` |
+| Elena Rossi | Security Engineer. Custodian: Security Tools, Infrastructure | `elena` |
+| Jamal Okafor | Backend Developer. Member: Databases, Infrastructure | `jamal` |
+| Sofia Alvarez | Finance Systems Analyst. Custodian: Finance Apps | `sofia` |
+| Tom Becker | Intern. Paired with nobody | `tom` |
 
 Things to try:
 
@@ -94,27 +91,25 @@ Things to try:
    automatically. Ask Elena for *SIEM admin*: it is denied, because Security Tools is members-only.
 4. **Sofia:** Jamal asked for her personal Expense tool login. Approve it and pick which credential to share.
 5. **Priya:** *Rotation tasks* has AWS root (Marcus's checkout expired yesterday). Rotate it; Elena gets the new secret.
-6. **Tom → Sofia:** on *Pair a device*, pair Tom with `sofia:7600`. Accept on Sofia's screen and compare the codes.
-7. **Audit:** *Event log* and *Log integrity* on any node.
+6. **Pairing:** Tom is paired with nobody. Pair him with your own node (*Pair a device*, address `127.0.0.1:7606`)
+   or with a node on another device (`<this device's Wi-Fi address>:7606`). The real node warns that Tom uses demo
+   keys, which is true: anyone with the public demo seed could impersonate him.
 
-Only one device should run the demo team: every copy derives the same six identities from the same public seed.
+Demo users' keys come from a public seed: never put real secrets in them. Your own node is never touched by demo mode.
+Demo mode stays on across restarts until you press *Stop demo mode*.
 
-## Reset the seeded values
+## Reset
 
-The seed is rebuilt whenever a node starts with an empty data volume, with timestamps relative to that moment (so
-Jamal's checkout again has about 45 minutes left).
+| What | How |
+|---|---|
+| Demo team back to its original seed | *Demo mode → Reset demo data*, or `scripts\reset-demo.ps1` / `./scripts/reset-demo.sh` |
+| Turn demo mode off | *Demo mode → Stop demo mode* (starting again keeps the demo data) |
+| Everything on this device (your vault, keys, pairings, and the demo) | `scripts\reset-all.ps1` / `./scripts/reset-all.sh`, or `docker compose down -v` then `docker compose up -d`. You are back to `user` / `user`. |
+| Stop without deleting anything | `docker compose stop` |
 
-| What | Windows | macOS / Linux | Plain Docker |
-|---|---|---|---|
-| Whole demo team | `scripts\reset-demo.ps1` | `./scripts/reset-demo.sh` | `docker compose down -v` then `docker compose up -d` |
-| One person (e.g. Tom) | `scripts\reset-demo.ps1 -Node tom` | `./scripts/reset-demo.sh tom` | `docker compose rm -sf tom`, `docker volume rm p2psec_tom`, `docker compose up -d tom` |
-| Device B's own node | `scripts\reset-demo.ps1 -Standalone` | `./scripts/reset-demo.sh --standalone` | `docker compose -f docker-compose.lan.yml down -v` |
-
-Run the `.ps1` scripts with `powershell -ExecutionPolicy Bypass -File ...`. Resetting one person leaves the others'
-memory of them intact, so after resetting Tom, re-pair device B with him. Resetting device B's node deletes its
-vault and keys for good: it asks you to type `DELETE` first.
-
-Stop without deleting anything: `docker compose stop` (and `docker compose -f docker-compose.lan.yml stop` on B).
+The seed's timestamps are relative to the moment the demo is (re)built, so after a reset Jamal's checkout again has
+about 45 minutes left. Run the `.ps1` scripts with `powershell -ExecutionPolicy Bypass -File ...`. `reset-all` asks
+you to type `DELETE` first, because it destroys your real vault.
 
 ## Security notes
 
@@ -134,19 +129,19 @@ Stop without deleting anything: `docker compose stop` (and `docker compose -f do
 Not in scope: a compromised machine while it is unlocked, Bluetooth (Docker cannot reach the radio; the transport is
 abstracted so a native Bluetooth transport can be added), internet/WAN use.
 
-**Demo keys are public.** `DEMO_SEED` derives every demo identity, and the node refuses to start with it unless
-`DEMO_MODE=1`. Never put real secrets in a demo node.
+**Demo keys are public.** Every demo identity derives from a public seed and only exists after you press *Demo
+mode*. Never put real secrets in a demo user.
 
 ## Development
 
 ```bash
 cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt   # .venv/bin on macOS/Linux
-.venv/Scripts/python -m pytest          # 91 tests: crypto, vault, audit, pairing (incl. MITM), channel, groups, engine, peers, API
+.venv/Scripts/python -m pytest          # 116 tests: crypto, vault, audit, pairing (incl. MITM), channel, groups, engine, peers, API
 
 cd frontend && npm ci && npm run dev    # UI on :5173, proxies /api to a node on 127.0.0.1:18001
 ```
 
-Run a node outside Docker: `NODE_ID=priya DEMO_MODE=1 DEMO_SEED=dev UI_PORT=18001 python -m p2psec` from `backend/`.
+Run a node outside Docker: `UI_PORT=18001 DATA_DIR=./data python -m p2psec` from `backend/` (signs in as user / user).
 
 ```
 backend/p2psec/
@@ -154,7 +149,8 @@ backend/p2psec/
   vault.py      Argon2id, two key tiers                channel.py   Noise_KK sessions, replay guard
   audit.py      hash-chained signed log, anchors       peer.py      TCP service, outbox, pairing sessions
   groups.py     signed group documents                 engine.py    requests, checkouts, receipts, rotation, sync
-  api.py        local REST API + static UI             seed.py      the demo team
+  api.py        local REST API + static UI             seed.py      the demo team's data
+  demo.py       opt-in in-process demo team            node.py      one node: vault, peer service, loops
 frontend/src/   React UI (pages/, components/Logo.jsx is the pea mark)
 docs/superpowers/specs/  design     docs/superpowers/plans/  implementation plan
 ```
