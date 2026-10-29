@@ -1,5 +1,7 @@
 # --- UI build ---------------------------------------------------------------
-FROM node:22.15.0-alpine AS ui
+# The UI is static HTML/JS/CSS, identical for every CPU type, so it always builds on the
+# builder's native platform. (npm under QEMU arm64 emulation crashes with an illegal instruction.)
+FROM --platform=$BUILDPLATFORM node:22.15.0-alpine AS ui
 WORKDIR /ui
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
