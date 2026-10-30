@@ -17,5 +17,5 @@ Wait-Healthy @("http://127.0.0.1:8000/api/status")
 Write-Host ""
 Write-Host "P2PSec is running: http://127.0.0.1:8000" -ForegroundColor Green
 Write-Host "  First sign-in: username 'user', password 'user' (change both in Node settings)."
-Write-Host "  Teammates on this Wi-Fi pair with you at:  ${LanIp}:7600"
+Write-Host "  Teammates on this Wi-Fi pair with you at:  ${LanIp}"
 Write-Host "  Demo mode (sign-in page) starts a seeded team; other devices can pair with its Tom at ${LanIp}:7606"

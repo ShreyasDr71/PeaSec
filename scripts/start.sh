@@ -15,7 +15,7 @@ cat <<EOF
 
 P2PSec is running: http://127.0.0.1:8000
   First sign-in: username 'user', password 'user' (change both in Node settings).
-  Teammates on this Wi-Fi pair with you at:  $ip:7600
+  Teammates on this Wi-Fi pair with you at:  $ip
   Demo mode (sign-in page) starts a seeded team; other devices can pair with its Tom at $ip:7606
   (The firewall step above only runs if ufw or firewalld is active.)
 EOF

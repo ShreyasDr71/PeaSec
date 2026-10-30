@@ -16,6 +16,7 @@ log = logging.getLogger("p2psec.peer")
 PAIR_TIMEOUT = 120
 CONNECT_TIMEOUT = 3
 ONLINE_WINDOW = 75
+DEFAULT_PEER_PORT = 7600   # the port every start script publishes
 
 
 def _u(s: str) -> bytes:
@@ -27,6 +28,20 @@ def split_addr(addr: str) -> tuple[str, int]:
     if not host or not port.isdigit():
         raise ValueError("address must look like host:port")
     return host.strip("[]"), int(port)
+
+
+def normalize_addr(addr: str) -> str:
+    """Accept what people type when pairing: a bare IP or hostname gets the default peer port."""
+    addr = addr.strip()
+    if addr.count(":") > 1 and not addr.startswith("["):     # bare IPv6
+        addr = f"[{addr}]"
+    if not addr.endswith("]") and ":" in addr:
+        host, port = split_addr(addr)
+    else:
+        host, port = addr.strip("[]"), DEFAULT_PEER_PORT
+    if not host or not 0 < port < 65536:
+        raise ValueError("enter the other computer's IP address, such as 192.168.1.20")
+    return f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
 
 
 class PairSession:
@@ -243,7 +258,7 @@ class PeerService:
     # --- pairing ------------------------------------------------------------------
 
     def begin_pair(self, addr: str) -> PairSession:
-        split_addr(addr)
+        addr = normalize_addr(addr)
         s = PairSession("initiator", addr)
         self.pair_sessions[s.id] = s
         self.spawn(self._initiate_pair(s))

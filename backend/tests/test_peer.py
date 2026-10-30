@@ -1,7 +1,7 @@
 """Real TCP between in-process nodes."""
 import asyncio
 import pytest
-from p2psec import db as dbmod, groups
+from p2psec import db as dbmod, groups, peer as peermod
 from p2psec.config import Settings
 from p2psec.node import Node
 
@@ -177,3 +177,21 @@ async def test_unreachable_pair_address_explains_what_to_check(tmp_path):
         assert "Could not reach 127.0.0.1:" in sess.error and "start script" in sess.error
     finally:
         await a.shutdown()
+
+
+@pytest.mark.parametrize("given,expected", [
+    ("192.168.1.20", "192.168.1.20:7600"),
+    (" 192.168.1.20 ", "192.168.1.20:7600"),
+    ("192.168.1.20:7606", "192.168.1.20:7606"),
+    ("laptop.local", "laptop.local:7600"),
+    ("fe80::1", "[fe80::1]:7600"),
+    ("[fe80::1]:7606", "[fe80::1]:7606"),
+])
+def test_pair_address_defaults_to_peer_port(given, expected):
+    assert peermod.normalize_addr(given) == expected
+
+
+@pytest.mark.parametrize("bad", ["", ":7600", "host:port", "1.2.3.4:99999"])
+def test_bad_pair_address_is_refused(bad):
+    with pytest.raises(ValueError):
+        peermod.normalize_addr(bad)

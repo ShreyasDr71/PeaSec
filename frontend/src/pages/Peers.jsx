@@ -4,6 +4,9 @@ import { ago, fmtTime, go, usePoll } from "../util.js";
 import { PeaPod } from "../components/Logo.jsx";
 import { Dot, Field, ListView, useAction } from "../components/ui.jsx";
 
+// The default peer port is implied when pairing, so show it as a bare IP.
+const shortAddr = (a) => (a || "").replace(/:7600$/, "");
+
 export function Peers() {
   const [rows, reload] = usePoll("/peers", 5000);
   const act = useAction();
@@ -71,14 +74,14 @@ export function Pair({ status }) {
           <h2>This device</h2>
           <dl className="facts">
             <dt>Person</dt><dd>{status.profile.name}</dd>
-            <dt>Address</dt><dd><code>{status.peer_addr}</code></dd>
+            <dt>Address</dt><dd><code>{shortAddr(status.peer_addr)}</code></dd>
             <dt>Fingerprint</dt><dd><code className="fpr">{status.fpr}</code></dd>
           </dl>
-          <p className="muted">Give your teammate this address, or enter theirs below. Under Docker, use the host
-            computer's LAN IP and the published peer port.</p>
+          <p className="muted">Give your teammate this address, or enter theirs below. Just the IP address is
+            enough; add <code>:port</code> only for a different port, such as <code>:7606</code> for demo Tom.</p>
           <form className="input-row" onSubmit={(e) => { e.preventDefault(); start(addr.trim()); }}>
-            <Field label="Teammate's address">
-              <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="192.168.1.20:7606" required />
+            <Field label="Teammate's IP address">
+              <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="192.168.1.20" required />
             </Field>
             <button className="btn btn-primary">Start pairing</button>
           </form>

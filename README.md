@@ -58,8 +58,8 @@ until you do.
 ## Use it between two devices on the same Wi-Fi
 
 1. Run the start script on both devices and sign in on each.
-2. On one device, go to *Pair a device* and enter the other device's address, which the script printed, such as
-   `192.168.1.20:7600`.
+2. On one device, go to *Pair a device* and enter the other device's IP address, which the script printed, such as
+   `192.168.1.20` (the port, 7600, is implied).
 3. Accept the request on the other device and read the six-digit codes to each other. Confirm only if they match.
 4. Add a credential on one device. From the other, *Request a credential → From a person*, then approve it.
 
