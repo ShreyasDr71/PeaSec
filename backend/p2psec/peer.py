@@ -32,15 +32,19 @@ def split_addr(addr: str) -> tuple[str, int]:
 
 def normalize_addr(addr: str) -> str:
     """Accept what people type when pairing: a bare IP or hostname gets the default peer port."""
+    hint = "enter the other computer's IP address, such as 192.168.1.20"
     addr = addr.strip()
     if addr.count(":") > 1 and not addr.startswith("["):     # bare IPv6
         addr = f"[{addr}]"
     if not addr.endswith("]") and ":" in addr:
-        host, port = split_addr(addr)
+        try:
+            host, port = split_addr(addr)
+        except ValueError:
+            raise ValueError(hint) from None
     else:
         host, port = addr.strip("[]"), DEFAULT_PEER_PORT
     if not host or not 0 < port < 65536:
-        raise ValueError("enter the other computer's IP address, such as 192.168.1.20")
+        raise ValueError(hint)
     return f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
 
 

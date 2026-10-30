@@ -193,5 +193,5 @@ def test_pair_address_defaults_to_peer_port(given, expected):
 
 @pytest.mark.parametrize("bad", ["", ":7600", "host:port", "1.2.3.4:99999"])
 def test_bad_pair_address_is_refused(bad):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="IP address"):
         peermod.normalize_addr(bad)
