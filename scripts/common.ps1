@@ -65,7 +65,7 @@ function Set-EnvValue([string]$Key, [string]$Value) {
     # docker compose reads .env from the project folder, so plain "docker compose up" keeps working later
     $path = Join-Path $Root ".env"
     $lines = @()
-    if (Test-Path $path) { $lines = Get-Content $path | Where-Object { $_ -notmatch "^$Key=" } }
+    if (Test-Path $path) { $lines = @(Get-Content $path | Where-Object { $_ -notmatch "^$Key=" }) }
     $lines += "$Key=$Value"
     Set-Content -Path $path -Value $lines -Encoding ascii
 }
